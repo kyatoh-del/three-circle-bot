@@ -1,52 +1,39 @@
 import React, { useMemo, useRef, useState } from "react";
 
-/* =========================================================
-   ThreeCircleBot  —  スリーサークル（家族／所有／経営）自動可視化
-   - 氏名＋チェックを入力 → 「追加」で図と表に反映
-   - JSON入出力・SVG/PNG保存（簡易）
-   - 日本語フォント指定（Noto Sans CJK JP / IPAexGothic / Meiryo）
-   ========================================================= */
+/** =========================================================
+ *  スリーサークル自動生成Bot（センタリング＆微オフセット済）
+ *  - 2手の修正を反映済み：
+ *    ① <svg> を中央寄せ（preserveAspectRatio='xMidYMid meet'）
+ *    ② 全要素を <g transform="translate(X,Y)"> で軽く右下へ平行移動
+ *       → オフセットは TRANSLATE_X / TRANSLATE_Y を調整
+ * ========================================================= */
 
-export type Participant = {
+/* ----------------- Types ----------------- */
+type Participant = {
   id: string;
   name: string;
-  family: boolean;
-  owner: boolean;
-  mgmt: boolean;
+  family: boolean; // Family
+  owner: boolean;  // Ownership
+  mgmt: boolean;   // Management
 };
 
 type Layout = {
   onlyF: Participant[];
   onlyO: Participant[];
   onlyM: Participant[];
-  FO: Participant[];
-  FM: Participant[];
-  OM: Participant[];
-  FOM: Participant[];
+  FO: Participant[];   // Family ∩ Ownership（非経営）
+  FM: Participant[];   // Family ∩ Management（非所有）
+  OM: Participant[];   // Ownership ∩ Management（非家族）
+  FOM: Participant[];  // 3つすべて
 };
 
-/* --------- 安全なID生成（crypto.randomUUIDを使わない） --------- */
-function genId(): string {
-  // 時刻＋乱数を16進で
-  return (
-    "id_" +
-    Date.now().toString(16) +
-    "_" +
-    Math.floor(Math.random() * 0xffff_ffff).toString(16).padStart(8, "0")
-  );
-}
+/* ----------------- Util ----------------- */
+const genId = () =>
+  (typeof crypto !== "undefined" && "randomUUID" in crypto)
+    ? (crypto as any).randomUUID()
+    : `id_${Math.random().toString(36).slice(2, 10)}`;
 
-/* ---------------- 初期サンプル ---------------- */
-const initialPeople: Participant[] = [
-  { id: genId(), name: "創業者（父）", family: true, owner: true, mgmt: true },
-  { id: genId(), name: "後継候補（長男）", family: true, owner: false, mgmt: true },
-  { id: genId(), name: "配偶者", family: true, owner: true, mgmt: false },
-  { id: genId(), name: "社外取締役A", family: false, owner: false, mgmt: true },
-  { id: genId(), name: "休眠株主（叔父）", family: true, owner: true, mgmt: false },
-  { id: genId(), name: "CFO", family: false, owner: false, mgmt: true },
-];
-
-/* ---------------- 分類 ---------------- */
+/* ----------------- Classify / Comments ----------------- */
 function classify(people: Participant[]): Layout {
   const L: Layout = { onlyF: [], onlyO: [], onlyM: [], FO: [], FM: [], OM: [], FOM: [] };
   for (const p of people) {
@@ -66,28 +53,252 @@ function classify(people: Participant[]): Layout {
   return L;
 }
 
-/* ---------------- コメント例 ---------------- */
 function generateComments(L: Layout): string[] {
   const out: string[] = [];
-  if (L.FOM.length) out.push(`【家族×所有×経営】重なり（${L.FOM.length}名）。役割の切替ルールを言語化。`);
-  if (L.OM.length)  out.push(`【所有×経営（非家族）】（${L.OM.length}名）。評価基準と説明責任を明確化。`);
-  if (L.FM.length)  out.push(`【家族×経営（非所有）】（${L.FM.length}名）。職務評価と家族感情の分離が鍵。`);
-  if (L.FO.length)  out.push(`【家族×所有（非経営）】（${L.FO.length}名）。情報共有の頻度と範囲を合意。`);
-  if (L.onlyM.length) out.push(`【経営のみ】（${L.onlyM.length}名）。権限と裁量の明確化。`);
-  if (L.onlyO.length) out.push(`【所有のみ】（${L.onlyO.length}名）。配当方針と議決権運用。`);
-  if (L.onlyF.length) out.push(`【家族のみ】（${L.onlyF.length}名）。家族会議の目的と非公開ラインの先出し。`);
-  if (out.length) out.push("※ 本出力は“診断”ではなく、対話のきっかけ資料です。");
+  if (L.FOM.length > 0) {
+    out.push(`【家族×所有×経営】重なり（${L.FOM.length}名）。意思決定の透明性と“役割の切替”のルールを言語化。`);
+  }
+  if (L.OM.length > 0) {
+    out.push(`【所有×経営（非家族）】（${L.OM.length}名）。評価基準と説明責任を明確に。`);
+  }
+  if (L.FM.length > 0) {
+    out.push(`【家族×経営（非所有）】（${L.FM.length}名）。目標設定とフィードバックの設計が鍵。`);
+  }
+  if (L.FO.length > 0) {
+    out.push(`【家族×所有（非経営）】（${L.FO.length}名）。情報共有の頻度と範囲を合意。`);
+  }
+  if (L.onlyM.length > 0) out.push(`【経営のみ】（${L.onlyM.length}名）。権限と裁量を明確に。`);
+  if (L.onlyO.length > 0) out.push(`【所有のみ】（${L.onlyO.length}名）。配当方針と議決権運用を明文化。`);
+  if (L.onlyF.length > 0) out.push(`【家族のみ】（${L.onlyF.length}名）。家族会議の目的と非公開ラインを設定。`);
+  if (out.length > 0) out.push("※ 本出力は“診断”でなく、対話の出発点です。");
   return out;
 }
 
-/* ---------------- SVG 定数 ---------------- */
+/* ----------------- SVG Consts ----------------- */
 const WIDTH = 900;
-const HEIGHT = 720; // ← 下が切れない高さ
-const CX = 320, CY = 320, R = 210;      // Family
-const CX2 = 500, CY2 = 320, R2 = 210;    // Ownership
-const CX3 = 410, CY3 = 440, R3 = 210;    // Management（下）
+const HEIGHT = 720;
 
-/* ========================================================= */
+// 3円の中心・半径
+const CX = 320, CY = 320, R = 210;     // Family (左上)
+const CX2 = 500, CY2 = 320, R2 = 210;  // Ownership (右上)
+const CX3 = 410, CY3 = 440, R3 = 210;  // Management (下)
+
+// タイトルや凡例など含む全体を少しだけ右下へ寄せる量（必要なら微調整）
+const TRANSLATE_X = 48;
+const TRANSLATE_Y = 16;
+
+const vennFillA = "rgba(59,130,246,0.18)";   // 青:F
+const vennFillB = "rgba(16,185,129,0.18)";   // 緑:O
+const vennFillC = "rgba(234,179,8,0.18)";    // 黄:M
+const vennStroke = "rgba(0,0,0,0.25)";
+
+/* ----------------- Small UI helpers ----------------- */
+function Card({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl bg-white shadow-sm border border-gray-200 p-4 md:p-5">
+      {children}
+    </div>
+  );
+}
+
+const labelStyle = { fontSize: 14, fontWeight: 600 } as const;
+const itemStyle = { fontSize: 13 } as const;
+
+const regionBox = (
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  title: string,
+  items: Participant[]
+) => (
+  <g>
+    <foreignObject x={x} y={y} width={w} height={h} style={{ overflow: "hidden" }}>
+      <div
+        style={{
+          fontFamily:
+            "'Noto Sans CJK JP','IPAexGothic','Meiryo',system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans',sans-serif",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+        } as any}
+      >
+        <div style={labelStyle as any}>{title}</div>
+        <div style={{ ...(itemStyle as any), display: "flex", flexDirection: "column", gap: 2 }}>
+          {items.length === 0 ? (
+            <span style={{ color: "#6b7280" }}>—</span>
+          ) : (
+            items.map((p) => <span key={p.id}>• {p.name}</span>)
+          )}
+        </div>
+      </div>
+    </foreignObject>
+  </g>
+);
+
+/* ----------------- SVG Component ----------------- */
+const VennSVG = React.forwardRef<SVGSVGElement, { title: string; layout: Layout }>(
+  function VennSVG({ title, layout }, ref) {
+    return (
+      <svg
+        ref={ref}
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        preserveAspectRatio="xMidYMid meet"
+        style={{
+          width: "100%",
+          maxWidth: WIDTH,
+          height: "auto",
+          display: "block",
+          margin: "0 auto",
+          background: "white",
+          borderRadius: 16,
+          border: "1px solid #e5e7eb",
+        }}
+      >
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&display=swap');
+          text, tspan, foreignObject, div, span {
+            font-family: 'Noto Sans CJK JP','IPAexGothic','Meiryo',system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans',sans-serif;
+          }
+        `}</style>
+
+        {/* ② 全体を少し右下へ移動 */}
+        <g transform={`translate(${TRANSLATE_X}, ${TRANSLATE_Y})`}>
+          {/* タイトル */}
+          <text x={WIDTH / 2 - TRANSLATE_X} y={40} textAnchor="middle" fontSize={20} fontWeight={700} fill="#111827">
+            {title}
+          </text>
+
+          {/* 3円 */}
+          <g>
+            <circle cx={CX} cy={CY} r={R} fill={vennFillA} stroke={vennStroke} />
+            <circle cx={CX2} cy={CY2} r={R2} fill={vennFillB} stroke={vennStroke} />
+            <circle cx={CX3} cy={CY3} r={R3} fill={vennFillC} stroke={vennStroke} />
+          </g>
+
+          {/* ラベル */}
+          <text x={CX - 140} y={CY - R - 10} fontSize={14} fontWeight={700} fill="#1f2937">家族 Family</text>
+          <text x={CX2 + 80} y={CY2 - R2 - 10} fontSize={14} fontWeight={700} fill="#1f2937">所有 Ownership</text>
+          <text x={CX3 - 35} y={CY3 + R3 + 24} fontSize={14} fontWeight={700} fill="#1f2937">経営 Management</text>
+
+          {/* 領域ボックス（必要に応じて x を微調整してください） */}
+          {regionBox(CX - R + 10, CY - 40, 160, 120, "家族のみ", layout.onlyF)}
+          {regionBox(CX2 + 60, CY - 40, 160, 120, "所有のみ", layout.onlyO)}   {/* 既定より+20寄せ */}
+          {regionBox(CX3 - 60, CY3 + 10, 200, 120, "経営のみ", layout.onlyM)}   {/* 既定より+20寄せ */}
+
+          {regionBox((CX + CX2) / 2 - 90, CY - 120, 180, 100, "家族×所有", layout.FO)}
+          {regionBox(CX - 160, (CY + CY3) / 2 - 30, 180, 100, "家族×経営", layout.FM)}
+          {regionBox(CX2 - 20, (CY2 + CY3) / 2 - 30, 180, 100, "所有×経営", layout.OM)}
+
+          {regionBox((CX + CX2 + CX3) / 3 - 90, (CY + CY2 + CY3) / 3 - 20, 200, 120, "家族×所有×経営", layout.FOM)}
+
+          {/* 凡例 */}
+          <g>
+            <rect x={30} y={60} width={12} height={12} fill={vennFillA} stroke={vennStroke} />
+            <text x={48} y={70} fontSize={12} fill="#374151">家族</text>
+            <rect x={100} y={60} width={12} height={12} fill={vennFillB} stroke={vennStroke} />
+            <text x={118} y={70} fontSize={12} fill="#374151">所有</text>
+            <rect x={170} y={60} width={12} height={12} fill={vennFillC} stroke={vennStroke} />
+            <text x={188} y={70} fontSize={12} fill="#374151">経営</text>
+          </g>
+        </g>
+      </svg>
+    );
+  }
+);
+
+/* ----------------- Download helpers ----------------- */
+function downloadJSON(data: Participant[]) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `three-circle-data-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function uploadJSON(e: React.ChangeEvent<HTMLInputElement>, setPeople: (p: Participant[]) => void) {
+  const file = e.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(String(reader.result));
+      if (Array.isArray(data)) {
+        const mapped: Participant[] = data.map((d: any) => ({
+          id: d.id || genId(),
+          name: String(d.name || "名無し"),
+          family: !!d.family,
+          owner: !!d.owner,
+          mgmt: !!d.mgmt,
+        }));
+        setPeople(mapped);
+      }
+    } catch {}
+  };
+  reader.readAsText(file);
+}
+
+function svgToBlob(svg: SVGSVGElement) {
+  const serializer = new XMLSerializer();
+  const src = serializer.serializeToString(svg);
+  return new Blob([src], { type: "image/svg+xml;charset=utf-8" });
+}
+
+function downloadSVG(ref: React.RefObject<SVGSVGElement>) {
+  const svg = ref.current;
+  if (!svg) return;
+  const blob = svgToBlob(svg);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `three-circle-${new Date().toISOString().slice(0, 10)}.svg`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function downloadPNG(ref: React.RefObject<SVGSVGElement>) {
+  const svg = ref.current;
+  if (!svg) return;
+  const blob = svgToBlob(svg);
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.onload = () => {
+    const scale = 2; // 高解像度
+    const canvas = document.createElement("canvas");
+    canvas.width = WIDTH * scale;
+    canvas.height = HEIGHT * scale;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    canvas.toBlob((pngBlob) => {
+      if (!pngBlob) return;
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(pngBlob);
+      a.download = `three-circle-${new Date().toISOString().slice(0, 10)}.png`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }, "image/png");
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+}
+
+/* ----------------- Sample Data ----------------- */
+const initialPeople: Participant[] = [
+  { id: genId(), name: "創業者（父）", family: true, owner: true, mgmt: true },
+  { id: genId(), name: "後継候補（長男）", family: true, owner: false, mgmt: true },
+  { id: genId(), name: "配偶者", family: true, owner: true, mgmt: false },
+  { id: genId(), name: "社外取締役A", family: false, owner: false, mgmt: true },
+  { id: genId(), name: "休眠株主（叔父）", family: true, owner: true, mgmt: false },
+  { id: genId(), name: "CFO", family: false, owner: false, mgmt: true },
+];
+
+/* ----------------- Main ----------------- */
 export default function ThreeCircleBot() {
   const [people, setPeople] = useState<Participant[]>(initialPeople);
   const [name, setName] = useState("");
@@ -100,88 +311,6 @@ export default function ThreeCircleBot() {
   const layout = useMemo(() => classify(people), [people]);
   const comments = useMemo(() => generateComments(layout), [layout]);
 
-  /* -------- 追加（堅牢版） -------- */
-  const addPerson = (e?: React.MouseEvent<HTMLButtonElement>) => {
-    e?.preventDefault();
-    const nm = name.trim();
-    if (!nm) {
-      alert("氏名を入力してください");
-      return;
-    }
-    if (!isFamily && !isOwner && !isMgmt) {
-      alert("家族／所有／経営のいずれかにチェックしてください");
-      return;
-    }
-    setPeople((prev) => [...prev, { id: genId(), name: nm, family: isFamily, owner: isOwner, mgmt: isMgmt }]);
-    setName("");
-    setIsFamily(false);
-    setIsOwner(false);
-    setIsMgmt(false);
-  };
-
-  /* -------- JSON入出力 -------- */
-  const downloadJSON = () => {
-    const blob = new Blob([JSON.stringify(people, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `three-circle-data-${new Date().toISOString().slice(0,10)}.json`; a.click();
-    URL.revokeObjectURL(url);
-  };
-  const uploadJSON = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return;
-    const rd = new FileReader();
-    rd.onload = () => {
-      try {
-        const data = JSON.parse(String(rd.result));
-        if (Array.isArray(data)) {
-          const mapped: Participant[] = data.map((d: any) => ({
-            id: d.id || genId(),
-            name: String(d.name || "名無し"),
-            family: !!d.family,
-            owner: !!d.owner,
-            mgmt: !!d.mgmt,
-          }));
-          setPeople(mapped);
-        }
-      } catch { /* no-op */ }
-    };
-    rd.readAsText(f);
-  };
-
-  /* -------- SVG/PNG保存 -------- */
-  const svgToBlob = (svg: SVGSVGElement) => {
-    const serializer = new XMLSerializer();
-    const src = serializer.serializeToString(svg);
-    return new Blob([src], { type: "image/svg+xml;charset=utf-8" });
-  };
-  const downloadSVG = () => {
-    const svg = svgRef.current; if (!svg) return;
-    const url = URL.createObjectURL(svgToBlob(svg));
-    const a = document.createElement("a");
-    a.href = url; a.download = `three-circle-${new Date().toISOString().slice(0,10)}.svg`; a.click();
-    URL.revokeObjectURL(url);
-  };
-  const downloadPNG = () => {
-    const svg = svgRef.current; if (!svg) return;
-    const url = URL.createObjectURL(svgToBlob(svg));
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      canvas.width = WIDTH * 2; canvas.height = HEIGHT * 2;
-      const ctx = canvas.getContext("2d"); if (!ctx) return;
-      ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      canvas.toBlob((png) => {
-        if (!png) return;
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(png); a.download = `three-circle-${new Date().toISOString().slice(0,10)}.png`; a.click();
-        URL.revokeObjectURL(a.href);
-      }, "image/png");
-      URL.revokeObjectURL(url);
-    };
-    img.src = url;
-  };
-
   return (
     <div
       className="min-h-screen w-full bg-gray-50 text-gray-900"
@@ -190,7 +319,7 @@ export default function ThreeCircleBot() {
       <div className="mx-auto max-w-6xl p-6">
         <header className="mb-6">
           <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">スリーサークル自動生成Bot</h1>
-          <p className="text-sm text-gray-600 mt-1">家族／所有／経営の重なりを可視化するミニツール</p>
+          <p className="text-sm text-gray-600 mt-1">家族／所有／経営の重なりを可視化し、対話の出発点をつくる小さなツール</p>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -199,7 +328,7 @@ export default function ThreeCircleBot() {
             <Card>
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-medium">参加者の追加</h2>
-                <div className="text-xs text-gray-500">氏名と所属をざっくり</div>
+                <div className="text-xs text-gray-500">* 氏名と所属をざっくり</div>
               </div>
               <div className="mt-4 space-y-3">
                 <input
@@ -207,7 +336,6 @@ export default function ThreeCircleBot() {
                   placeholder="氏名（例：山田 太郎）"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === "Enter") addPerson(); }}
                   className="w-full rounded-xl border border-gray-300 p-2 focus:outline-none focus:ring-2 focus:ring-gray-800"
                 />
                 <div className="flex gap-4 text-sm">
@@ -226,9 +354,18 @@ export default function ThreeCircleBot() {
                 </div>
                 <div className="flex gap-3">
                   <button
-                    type="button"
                     className="rounded-xl bg-gray-900 text-white px-3 py-2 text-sm hover:bg-black"
-                    onClick={addPerson}
+                    onClick={() => {
+                      if (!name.trim()) return;
+                      setPeople((prev) => [
+                        ...prev,
+                        { id: genId(), name: name.trim(), family: isFamily, owner: isOwner, mgmt: isMgmt },
+                      ]);
+                      setName("");
+                      setIsFamily(false);
+                      setIsOwner(false);
+                      setIsMgmt(false);
+                    }}
                   >
                     追加
                   </button>
@@ -245,12 +382,12 @@ export default function ThreeCircleBot() {
             <Card>
               <h2 className="text-lg font-medium">データ管理</h2>
               <div className="mt-3 flex flex-wrap gap-2 text-sm">
-                <button className="rounded-xl border px-3 py-2 hover:bg-gray-100" onClick={downloadJSON}>
+                <button className="rounded-xl border px-3 py-2 hover:bg-gray-100" onClick={() => downloadJSON(people)}>
                   JSONを書き出し
                 </button>
                 <label className="rounded-xl border px-3 py-2 hover:bg-gray-100 cursor-pointer">
                   JSONを読み込み
-                  <input type="file" accept="application/json" className="hidden" onChange={uploadJSON} />
+                  <input type="file" accept="application/json" className="hidden" onChange={(e) => uploadJSON(e, setPeople)} />
                 </label>
               </div>
             </Card>
@@ -258,17 +395,18 @@ export default function ThreeCircleBot() {
             <Card>
               <h2 className="text-lg font-medium">書き出し</h2>
               <div className="mt-3 space-y-2 text-sm">
-                <button className="rounded-xl border px-3 py-2 hover:bg-gray-100 w-full" onClick={downloadSVG}>
+                <button className="rounded-xl border px-3 py-2 hover:bg-gray-100 w-full" onClick={() => downloadSVG(svgRef)}>
                   SVG保存
                 </button>
-                <button className="rounded-xl border px-3 py-2 hover:bg-gray-100 w-full" onClick={downloadPNG}>
+                <button className="rounded-xl border px-3 py-2 hover:bg-gray-100 w-full" onClick={() => downloadPNG(svgRef)}>
                   PNG保存
                 </button>
+                <div className="mt-2 text-xs text-gray-500">※ 書き出し時も日本語フォント（Noto/IPAex/Meiryo）指定</div>
               </div>
             </Card>
           </section>
 
-          {/* 中央：図とコメント */}
+          {/* 右：図＆リスト */}
           <section className="lg:col-span-2">
             <Card>
               <div className="flex items-center justify-between gap-3">
@@ -289,7 +427,7 @@ export default function ThreeCircleBot() {
               <h2 className="text-lg font-medium">コメント例（対話のヒント）</h2>
               <ul className="mt-3 list-disc pl-5 text-sm leading-6 text-gray-800">
                 {comments.length === 0 ? (
-                  <li>重なりが少ない構成です。役割と言葉の定義から始めましょう。</li>
+                  <li>重なりが少ないようです。関係図を共有し、役割と言葉の定義から始めましょう。</li>
                 ) : (
                   comments.map((c, i) => <li key={i}>{c}</li>)
                 )}
@@ -316,10 +454,7 @@ export default function ThreeCircleBot() {
                       <td className="py-1">{p.owner ? "◯" : "―"}</td>
                       <td className="py-1">{p.mgmt ? "◯" : "―"}</td>
                       <td className="py-1 text-right">
-                        <button
-                          className="text-xs text-red-600 hover:underline"
-                          onClick={() => setPeople((prev) => prev.filter((x) => x.id !== p.id))}
-                        >
+                        <button className="text-xs text-red-600 hover:underline" onClick={() => setPeople((prev) => prev.filter((x) => x.id !== p.id))}>
                           削除
                         </button>
                       </td>
@@ -334,93 +469,3 @@ export default function ThreeCircleBot() {
     </div>
   );
 }
-
-/* ---------------- UI ---------------- */
-function Card({ children }: { children: React.ReactNode }) {
-  return <div className="rounded-2xl bg-white shadow-sm border border-gray-200 p-4 md:p-5">{children}</div>;
-}
-
-/* ---------------- SVG ---------------- */
-const VennSVG = React.forwardRef<SVGSVGElement, { title: string; layout: Layout }>(function VennSVG(
-  { title, layout },
-  ref
-) {
-  const labelStyle: React.CSSProperties = { fontSize: 14, fontWeight: 700, fill: "#1f2937" };
-  const itemStyle: React.CSSProperties = { fontSize: 13 };
-  const vennFillA = "rgba(59,130,246,0.18)";  // 青 Family
-  const vennFillB = "rgba(16,185,129,0.18)";  // 緑 Ownership
-  const vennFillC = "rgba(234,179,8,0.18)";   // 黄 Management
-  const vennStroke = "rgba(0,0,0,0.25)";
-
-  const Region = (x: number, y: number, w: number, h: number, title: string, items: Participant[]) => (
-    <g>
-      <foreignObject x={x} y={y} width={w} height={h} style={{ overflow: "hidden" }}>
-        <div
-          style={{
-            fontFamily: `'Noto Sans CJK JP','IPAexGothic','Meiryo',system-ui`,
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-          } as any}
-        >
-          <div style={labelStyle as any}>{title}</div>
-          <div style={{ ...itemStyle, display: "flex", flexDirection: "column", gap: 2 } as any}>
-            {items.length === 0 ? <span style={{ color: "#6b7280" }}>—</span> : items.map((p) => <span key={p.id}>• {p.name}</span>)}
-          </div>
-        </div>
-      </foreignObject>
-    </g>
-  );
-
-  return (
-    <svg
-      ref={ref}
-      xmlns="http://www.w3.org/2000/svg"
-      width={WIDTH}
-      height={HEIGHT}
-      viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-      style={{ background: "white", borderRadius: 16, border: "1px solid #e5e7eb" }}
-    >
-      <style>{`
-        text, tspan, foreignObject, div, span {
-          font-family: 'Noto Sans CJK JP','IPAexGothic','Meiryo',system-ui,-apple-system,Segoe UI,Roboto,'Noto Sans',sans-serif;
-        }
-      `}</style>
-
-      <text x={WIDTH / 2} y={40} textAnchor="middle" fontSize={20} fontWeight={700} fill="#111827">
-        {title}
-      </text>
-
-      {/* Circles */}
-      <g>
-        <circle cx={CX} cy={CY} r={R} fill={vennFillA} stroke={vennStroke} />
-        <circle cx={CX2} cy={CY2} r={R2} fill={vennFillB} stroke={vennStroke} />
-        <circle cx={CX3} cy={CY3} r={R3} fill={vennFillC} stroke={vennStroke} />
-      </g>
-
-      {/* Labels */}
-      <text x={CX - 140} y={CY - R - 10} style={labelStyle}>家族 Family</text>
-      <text x={CX2 + 80} y={CY2 - R2 - 10} style={labelStyle}>所有 Ownership</text>
-      <text x={CX3 - 35} y={CY3 + R3 + 24} style={labelStyle}>経営 Management</text>
-
-      {/* Regions */}
-      {Region(CX - R + 10, CY - 40, 160, 120, "家族のみ", layout.onlyF)}
-      {Region(CX2 + 40, CY - 40, 160, 120, "所有のみ", layout.onlyO)}
-      {Region(CX3 - 80, CY3 + 10, 200, 120, "経営のみ", layout.onlyM)}
-      {Region((CX + CX2) / 2 - 90, CY - 120, 180, 100, "家族×所有", layout.FO)}
-      {Region(CX - 160, (CY + CY3) / 2 - 30, 180, 100, "家族×経営", layout.FM)}
-      {Region(CX2 - 20, (CY2 + CY3) / 2 - 30, 180, 100, "所有×経営", layout.OM)}
-      {Region((CX + CX2 + CX3) / 3 - 90, (CY + CY2 + CY3) / 3 - 20, 200, 120, "家族×所有×経営", layout.FOM)}
-
-      {/* Legend */}
-      <g>
-        <rect x={30} y={60} width={12} height={12} fill={vennFillA} stroke={vennStroke} />
-        <text x={48} y={70} fontSize={12} fill="#374151">家族</text>
-        <rect x={100} y={60} width={12} height={12} fill={vennFillB} stroke={vennStroke} />
-        <text x={118} y={70} fontSize={12} fill="#374151">所有</text>
-        <rect x={170} y={60} width={12} height={12} fill={vennFillC} stroke={vennStroke} />
-        <text x={188} y={70} fontSize={12} fill="#374151">経営</text>
-      </g>
-    </svg>
-  );
-});
