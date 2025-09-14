@@ -137,10 +137,10 @@ const VennSVG = React.forwardRef<SVGSVGElement, { title: string; layout: Layout 
          {/* 領域（最終チューニング） */}
         {regionBox(CX - R + 40, CY - 40, 150, 120, "家族のみ", layout.onlyF)}         // ほんの少し右へ
         {regionBox(CX2 + 90,   CY - 40, 150, 120, "所有のみ", layout.onlyO)}         // そのまま（ちょうど良い）
-        {regionBox(CX3 - 90,   CY3 + 60, 180, 120, "経営のみ", layout.onlyM)}        // 真下（下円の中央直下）
+        {regionBox(CX3 - 70,   CY3 + 60, 180, 120, "経営のみ", layout.onlyM)}        // 真下（下円の中央直下）
 
         {regionBox(CX - 90,    CY + 50, 150, 120, "家族×経営", layout.FM)}          // 左下へ
-        {regionBox(CX2 + 10,   CY + 60, 150, 120, "所有×経営", layout.OM)}          // 真下へ
+        {regionBox(CX2 + 30,   CY + 60, 150, 120, "所有×経営", layout.OM)}          // 真下へ
         {regionBox(CX + 40,    CY - 60, 150, 120, "家族×所有", layout.FO)}          // 右45度上へ
 
         {regionBox(CX + 40,    CY + 30, 160, 120, "家族×所有×経営", layout.FOM)}   // 少し右上へ
@@ -232,4 +232,5 @@ export default function ThreeCircleBot() {
     </div>
   );
 }
+
 
