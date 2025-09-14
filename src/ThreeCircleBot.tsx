@@ -187,15 +187,19 @@ const VennSVG = React.forwardRef<SVGSVGElement, { title: string; layout: Layout 
           <text x={CX3 - 35} y={CY3 + R3 + 24} fontSize={14} fontWeight={700} fill="#1f2937">経営 Management</text>
 
           {/* 領域ボックス（必要に応じて x を微調整してください） */}
-          {regionBox(CX - R + 60, CY - 20, 160, 120, "家族のみ", layout.onlyF)}
-          {regionBox(CX2 + 100, CY - 20, 160, 120, "所有のみ", layout.onlyO)}   {/* 既定より+20寄せ */}
-          {regionBox(CX3 - 50, CY3 + 80, 200, 120, "経営のみ", layout.onlyM)}   {/* 既定より+20寄せ */}
+          // ①単独領域
+          {regionBox(CX - R + 40,  CY - 30, 160, 120, "家族のみ", layout.onlyF)}   // 左円：さらに +20px 右＆ 10px 上
+          {regionBox(CX2 + 140,    CY - 30, 160, 120, "所有のみ", layout.onlyO)}   // 右円：さらに +20px 右＆ 10px 上
+          {regionBox(CX3 + 60,     CY3 + 30, 200, 120, "経営のみ", layout.onlyM)}  // 下円：+20px 右＆ +10px 下
 
-          {regionBox((CX + CX2) / 2 - 90, CY - 120, 180, 100, "家族×所有", layout.FO)}
-          {regionBox(CX - 160, (CY + CY3) / 2 - 30, 180, 100, "家族×経営", layout.FM)}
-          {regionBox(CX2 - 20, (CY2 + CY3) / 2 - 30, 180, 100, "所有×経営", layout.OM)}
+          // ②二重重なり
+          {regionBox((CX + CX2)/2 - 70,  CY - 120,                     180, 100, "家族×所有", layout.FO)} // ほんの少し右寄せ
+          {regionBox(CX - 150,           (CY + CY3)/2 - 20,            180, 100, "家族×経営", layout.FM)} // 右＆少し上
+          {regionBox(CX2 - 10,           (CY2 + CY3)/2 - 20,           180, 100, "所有×経営", layout.OM)} // 右＆少し上
 
-          {regionBox((CX + CX2 + CX3) / 3 - 90, (CY + CY2 + CY3) / 3 - 20, 200, 120, "家族×所有×経営", layout.FOM)}
+          // ③三重重なり
+          {regionBox((CX + CX2 + CX3)/3 - 80, (CY + CY2 + CY3)/3 - 10, 200, 120, "家族×所有×経営", layout.FOM)}
+
 
           {/* 凡例 */}
           <g>
@@ -473,6 +477,7 @@ export default function ThreeCircleBot() {
     </div>
   );
 }
+
 
 
 
