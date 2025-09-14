@@ -300,7 +300,7 @@ const initialPeople: Participant[] = [
 
 /* ----------------- Main ----------------- */
 export default function ThreeCircleBot() {
-  const [people, setPeople] = useState<Participant[]>(initialPeople);
+  const [people, setPeople] = useState<Participant[]>([]);
   const [name, setName] = useState("");
   const [isFamily, setIsFamily] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
