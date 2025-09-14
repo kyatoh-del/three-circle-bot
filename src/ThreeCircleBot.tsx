@@ -112,6 +112,7 @@ const regionBox = (
   title: string,
   items: Participant[]
 ) => (
+  if (!items || items.length === 0) return null;
   <g>
     <foreignObject x={x} y={y} width={w} height={h} style={{ overflow: "hidden" }}>
       <div
@@ -472,6 +473,7 @@ export default function ThreeCircleBot() {
     </div>
   );
 }
+
 
 
 
