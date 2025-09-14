@@ -157,14 +157,21 @@ const VennSVG = React.forwardRef<SVGSVGElement, { title: string; layout: Layout 
           <text x={CX3} y={CY3 + R3 + 30} textAnchor="middle" fontWeight="bold">経営 Management</text>
 
           {/* 各領域 */}
-          {regionBox(CX - R + 40, CY - 40, 160, 120, "家族のみ", layout.onlyF)}
-          {regionBox(CX2 + 140, CY - 40, 160, 120, "所有のみ", layout.onlyO)}
-          {regionBox(CX3 + 60, CY3 + 20, 200, 120, "経営のみ", layout.onlyM)}
+          // （中略）<g transform={`translate(${OFFSET_X}, ${OFFSET_Y})`}> の中
 
-          {regionBox(CX - 20, CY - 60, 160, 120, "家族×所有", layout.fAndO)}
-          {regionBox(CX - 100, CY + 20, 160, 120, "家族×経営", layout.fAndM)}
-          {regionBox(CX2 + 60, CY2 + 20, 160, 120, "所有×経営", layout.oAndM)}
-          {regionBox(CX - 20, CY - 20, 200, 120, "家族×所有×経営", layout.all)}
+          // ── 単独領域 ────────────────────────────
+          {regionBox(CX - R + 40, CY - 40, 160, 120, "家族のみ", layout.onlyF)}         // そのまま
+          {regionBox(CX2 + 120, CY - 40, 160, 120, "所有のみ", layout.onlyO)}           // ← 20px 左へ
+          {regionBox(CX3 + 30,  CY3 + 40, 200, 120, "経営のみ", layout.onlyM)}          // ←30px 左 & ↓20px
+
+          // ── 2つ重なり ───────────────────────────
+          {regionBox(CX + 0,   CY - 80, 160, 120, "家族×所有", layout.fAndO)}           // →20px 右 & ↑20px（元: CX-20, CY-60）
+          {regionBox(CX - 100, CY + 40, 160, 120, "家族×経営", layout.fAndM)}           // ↓20px（元: CY+20）
+          {regionBox(CX2 + 40, CY2 + 30, 160, 120, "所有×経営", layout.oAndM)}          // ←20px 左 & ↓10px（元: CX2+60, CY2+20）
+
+          // ── 3つ重なり ───────────────────────────
+          {regionBox(CX + 0,   CY + 0,  200, 120, "家族×所有×経営", layout.all)}        // →20px 右 & ↓20px（元: CX-20, CY-20）
+
         </g>
       </svg>
     );
@@ -224,3 +231,4 @@ function classify(people: Participant[]): Layout {
   }
   return out;
 }
+
