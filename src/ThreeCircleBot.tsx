@@ -1,237 +1,154 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useMemo, useState } from "react";
 
-// ---- 型定義 ----
-type Participant = {
+const R_OPTIONS = ["R0", "R1", "R2", "R3"] as const;
+const LV_OPTIONS = ["Lv1", "Lv2", "Lv3", "Lv4", "Lv5"] as const;
+
+type ReflectionChoice = {
   id: string;
-  name: string;
-  family: boolean;
-  owner: boolean;
-  mgmt: boolean;
+  label: string;
+  tone: "plus" | "zero" | "minus";
 };
 
-type Layout = {
-  onlyF: Participant[];
-  onlyO: Participant[];
-  onlyM: Participant[];
-  FO: Participant[];
-  FM: Participant[];
-  OM: Participant[];
-  FOM: Participant[];
+const REFLECTION_CHOICES: ReflectionChoice[] = [
+  { id: "plus-strong", label: "プラス（手応え大）", tone: "plus" },
+  { id: "plus-soft", label: "プラス（小さな前進）", tone: "plus" },
+  { id: "zero-calm", label: "ゼロ（落ち着いている）", tone: "zero" },
+  { id: "zero-hold", label: "ゼロ（様子見）", tone: "zero" },
+  { id: "minus-soft", label: "マイナス（少し重い）", tone: "minus" },
+  { id: "minus-strong", label: "マイナス（停滞感）", tone: "minus" },
+];
+
+const FIXED_QUESTIONS = [
+  "今この場で、安心して話せることはどこまでですか？",
+  "話題の扱われ方を少し変えるなら、どこから試せますか？",
+];
+
+const REFLECTION_MESSAGE: Record<ReflectionChoice["tone"], string> = {
+  plus: "小さな変化を言葉にできています。次の一歩は軽く選べます。",
+  zero: "今は整えるタイミングです。確認の一言だけ置いてみましょう。",
+  minus: "重さがあるのは自然です。支えを増やす選択肢も検討できます。",
 };
 
-// ---- ユーティリティ ----
-function genId() {
-  return Math.random().toString(36).substr(2, 9);
+const PLACEHOLDER_CONTEXT = "会話が止まった言葉";
+
+function buildGeneratedQuestion(context: string, rStage: string, level: string) {
+  const safeContext = context.trim() || PLACEHOLDER_CONTEXT;
+  return `「${safeContext}」を扱うとき、${rStage}の今は何を保留できますか？(${level})`;
 }
 
-function classify(people: Participant[]): Layout {
-  const out: Layout = {
-    onlyF: [],
-    onlyO: [],
-    onlyM: [],
-    FO: [],
-    FM: [],
-    OM: [],
-    FOM: [],
-  };
-  for (const p of people) {
-    const { family, owner, mgmt } = p;
-    const sum = [family, owner, mgmt].filter(Boolean).length;
-    if (sum === 1) {
-      if (family) out.onlyF.push(p);
-      if (owner) out.onlyO.push(p);
-      if (mgmt) out.onlyM.push(p);
-    } else if (sum === 2) {
-      if (family && owner) out.FO.push(p);
-      if (family && mgmt) out.FM.push(p);
-      if (owner && mgmt) out.OM.push(p);
-    } else if (sum === 3) {
-      out.FOM.push(p);
-    }
-  }
-  return out;
-}
-
-// ---- レイアウト用定数 ----
-const WIDTH = 900, HEIGHT = 720;
-const CX = 320, CY = 300, R = 210;
-const CX2 = 500, CY2 = 300, R2 = 210;
-const CX3 = 410, CY3 = 440, R3 = 210;
-
-// ---- SVG 部品 ----
-const VennSVG = React.forwardRef<SVGSVGElement, { title: string; layout: Layout }>(
-  ({ title, layout }, ref) => {
-    const labelStyle = { fontSize: 14, fontWeight: 600 } as const;
-    const itemStyle = { fontSize: 13 } as const;
-
-    // 領域ボックス
-    const regionBox = (
-      x: number,
-      y: number,
-      w: number,
-      h: number,
-      title: string,
-      items: Participant[]
-    ) => (
-      <foreignObject
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        style={{ overflow: "hidden" }}
-        requiredExtensions="http://www.w3.org/1999/xhtml"
-      >
-        <div
-          style={{
-            fontFamily:
-              "'Noto Sans JP','IPAexGothic','Meiryo',system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans',sans-serif",
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-          }}
-        >
-          <div style={labelStyle}>{title}</div>
-          {items.length > 0 &&
-            items.map((p) => (
-              <div key={p.id} style={itemStyle}>
-                {p.name}
-              </div>
-            ))}
-        </div>
-      </foreignObject>
-    );
-
-    return (
-      <svg
-        ref={ref}
-        xmlns="http://www.w3.org/2000/svg"
-        width={WIDTH}
-        height={HEIGHT}
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-      >
-        <text
-          x={WIDTH / 2}
-          y={40}
-          textAnchor="middle"
-          fontSize={20}
-          fontWeight={700}
-        >
-          {title}
-        </text>
-
-        <circle cx={CX} cy={CY} r={R} fill="rgba(59,130,246,0.18)" stroke="gray" />
-        <circle cx={CX2} cy={CY2} r={R2} fill="rgba(16,185,129,0.18)" stroke="gray" />
-        <circle cx={CX3} cy={CY3} r={R3} fill="rgba(234,179,8,0.18)" stroke="gray" />
-
-        {/* ラベル */}
-        <text x={CX} y={CY - R - 10} textAnchor="middle" fontWeight={600}>
-          家族 Family
-        </text>
-        <text x={CX2} y={CY2 - R2 - 10} textAnchor="middle" fontWeight={600}>
-          所有 Ownership
-        </text>
-        <text x={CX3} y={CY3 + R3 + 25} textAnchor="middle" fontWeight={600}>
-          経営 Management
-        </text>
-
-         {/* 領域（最終チューニング） */}
-        {regionBox(CX - R + 40, CY - 40, 150, 120, "家族のみ", layout.onlyF)}         // ほんの少し右へ
-        {regionBox(CX2 + 90,   CY - 40, 150, 120, "所有のみ", layout.onlyO)}         // そのまま（ちょうど良い）
-        {regionBox(CX3 - 40,   CY3 + 80, 180, 120, "経営のみ", layout.onlyM)}        // 真下（下円の中央直下）
-
-        {regionBox(CX - 90,    CY + 50, 150, 120, "家族×経営", layout.FM)}          // 左下へ
-        {regionBox(CX2 + 30,   CY + 60, 150, 120, "所有×経営", layout.OM)}          // 真下へ
-        {regionBox(CX + 40,    CY - 60, 150, 120, "家族×所有", layout.FO)}          // 右45度上へ
-
-        {regionBox(CX + 40,    CY + 30, 160, 120, "家族×所有×経営", layout.FOM)}   // 少し右上へ
-      </svg>
-    );
-  }
-);
-
-// ---- 初期データ ----
-const initialPeople: Participant[] = [];
-
-// ---- メイン ----
 export default function ThreeCircleBot() {
-  const [people, setPeople] = useState<Participant[]>(initialPeople);
-  const [name, setName] = useState("");
-  const [family, setFamily] = useState(false);
-  const [owner, setOwner] = useState(false);
-  const [mgmt, setMgmt] = useState(false);
-  const svgRef = useRef<SVGSVGElement>(null);
+  const [stuckWords, setStuckWords] = useState("");
+  const [rStage, setRStage] = useState<(typeof R_OPTIONS)[number]>("R0");
+  const [energyLevel, setEnergyLevel] = useState<(typeof LV_OPTIONS)[number]>("Lv3");
+  const [reflection, setReflection] = useState<ReflectionChoice | null>(null);
 
-  const layout = useMemo(() => classify(people), [people]);
+  const generatedQuestion = useMemo(
+    () => buildGeneratedQuestion(stuckWords, rStage, energyLevel),
+    [stuckWords, rStage, energyLevel]
+  );
 
-  const addPerson = () => {
-    if (!name.trim()) return;
-    setPeople([
-      ...people,
-      { id: genId(), name, family, owner, mgmt }
-    ]);
-    setName("");
-    setFamily(false);
-    setOwner(false);
-    setMgmt(false);
-  };
+  const reflectionMessage = reflection ? REFLECTION_MESSAGE[reflection.tone] : "";
 
   return (
-    <div
-      className="min-h-screen w-full bg-gray-50 text-gray-900"
-      style={{
-        fontFamily: "'Noto Sans JP','IPAexGothic','Meiryo',system-ui,-apple-system,'Segoe UI',Roboto,'Noto Sans',sans-serif",
-      }}
-    >
-      <div className="mx-auto max-w-6xl p-6">
-        <header className="mb-6">
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">
-            スリーサークル図（家族／所有／経営）
-          </h1>
+    <div className="page">
+      <div className="page__inner">
+        <header className="page__header">
+          <p className="page__eyebrow">家族経営・対話支援プロトタイプ</p>
+          <h1>1画面完結・対話支援ボード</h1>
+          <p className="page__lead">
+            説得せず、合意を急がず、話題の扱われ方を少しだけ変えるための設計です。
+          </p>
         </header>
 
-        <div style={{ marginBottom: "1em" }}>
-          <label>
-            氏名（例：山田 太郎）{" "}
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              style={{ border: "1px solid #999", marginRight: 8 }}
-            />
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={family}
-              onChange={(e) => setFamily(e.target.checked)}
-            />
-            家族
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={owner}
-              onChange={(e) => setOwner(e.target.checked)}
-            />
-            所有
-          </label>
-          <label>
-            <input
-              type="checkbox"
-              checked={mgmt}
-              onChange={(e) => setMgmt(e.target.checked)}
-            />
-            経営
-          </label>
-          <button onClick={addPerson} style={{ marginLeft: 8 }}>
-            追加
-          </button>
-        </div>
+        <div className="grid">
+          <section className="card">
+            <h2>入力</h2>
+            <div className="field">
+              <label htmlFor="stuckWords">会話が止まった言葉</label>
+              <textarea
+                id="stuckWords"
+                value={stuckWords}
+                onChange={(event) => setStuckWords(event.target.value)}
+                rows={3}
+                placeholder="例：相続の話題は今は避けたい"
+              />
+            </div>
 
-        <VennSVG ref={svgRef} title="スリーサークル自動生成Bot" layout={layout} />
+            <div className="field">
+              <span className="field__label">家族の段階 R</span>
+              <div className="radio-group">
+                {R_OPTIONS.map((option) => (
+                  <label key={option} className="radio">
+                    <input
+                      type="radio"
+                      name="rStage"
+                      value={option}
+                      checked={rStage === option}
+                      onChange={() => setRStage(option)}
+                    />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="field">
+              <span className="field__label">自分の余力 Lv</span>
+              <div className="radio-group">
+                {LV_OPTIONS.map((option) => (
+                  <label key={option} className="radio">
+                    <input
+                      type="radio"
+                      name="energyLevel"
+                      value={option}
+                      checked={energyLevel === option}
+                      onChange={() => setEnergyLevel(option)}
+                    />
+                    {option}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="card">
+            <h2>問い（1行・口に出せる長さ）</h2>
+            <ol className="question-list">
+              {FIXED_QUESTIONS.map((question) => (
+                <li key={question}>{question}</li>
+              ))}
+              <li>{generatedQuestion}</li>
+            </ol>
+            <p className="hint">
+              専門家が抱え込まないために、問いを一つずつ使います。
+            </p>
+          </section>
+
+          <section className="card">
+            <h2>振り返り（リボーログ）</h2>
+            <div className="field">
+              <span className="field__label">チェック</span>
+              <div className="radio-group radio-group--stack">
+                {REFLECTION_CHOICES.map((choice) => (
+                  <label key={choice.id} className="radio">
+                    <input
+                      type="radio"
+                      name="reflection"
+                      value={choice.id}
+                      checked={reflection?.id === choice.id}
+                      onChange={() => setReflection(choice)}
+                    />
+                    {choice.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div className="message">
+              {reflectionMessage || "チェックを選ぶと短いメッセージが表示されます。"}
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );
 }
-
-
-
